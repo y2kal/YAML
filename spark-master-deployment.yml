@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: spark-master
+  namespace: default
+  labels:
+    app: spark
+    role: master
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark
+      role: master
+  template:
+    metadata:
+      labels:
+        app: spark
+        role: master
+    spec:
+      initContainers:
+        - name: init-spark-logs
+          image: busybox:1.35
+          command: ['sh', '-c', 'mkdir -p /mnt/data/spark-events && chmod -R 777 /mnt/data/spark-events']
+          volumeMounts:
+            - name: spark-events
+              mountPath: /mnt/data/spark-events
+      containers:
+        - name: spark-master
+          image: "acrspark.azurecr.io/spark_250416:latest"
+          ports:
+            - containerPort: 7077
+            - containerPort: 8080
+          env:
+            - name: SPARK_MODE
+              value: "master"
+            - name: SPARK_MASTER_HOST
+              value: "spark-master-service:7077"
+            - name: SPARK_MASTER_PORT
+              value: "7077"
+            - name: SPARK_UI_PORT
+              value: "8080"
+            - name: SPARK_DRIVER_PORT
+              value: "39999"
+            - name: SPARK_BLOCK_MANAGER_PORT
+              value: "5373"
+            - name: SPARK_LOCAL_DIRS
+              value: "/tmp"
+          args:
+            - "/opt/spark/bin/spark-class"
+            - "org.apache.spark.deploy.master.Master"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "7077"
+            - "--webui-port"
+            - "8080"
+            - "--ip"
+            - "0.0.0.0"
+          volumeMounts:
+            - name: spark-events
+              mountPath: /mnt/data/spark-events
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "1"
+            limits:
+              memory: "2Gi"
+              cpu: "2"
+          livenessProbe:
+            httpGet:
+              path: / 
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+      volumes:
+        - name: spark-events
+          persistentVolumeClaim:
+            claimName: spark-data-pvc

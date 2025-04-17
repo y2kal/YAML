@@ -4,7 +4,7 @@ metadata:
   name: spark-master-service
   namespace: default
 spec:
-  type: LoadBalancer  # Use ClusterIP for internal access
+  type: LoadBalancer
   ports:
     - name: webui
       port: 8080
