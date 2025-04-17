@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spark-history-server
+  labels:
+    app: spark-history-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spark-history-server
+  template:
+    metadata:
+      labels:
+        app: spark-history-server
+    spec:
+      serviceAccountName: spark
+      containers:
+      - name: spark-history-server
+        image: "acrdlspark.azurecr.io/spark_20250331:latest"
+        command: ["/opt/spark/bin/spark-class"]
+        args: ["org.apache.spark.deploy.history.HistoryServer"]
+        ports:
+        - containerPort: 18080
+        env:
+        - name: SPARK_HISTORY_OPTS
+          value: >-
+            -Dspark.history.fs.logDirectory=/mnt/data/spark-events
+            -Dspark.history.ui.port=18080
+            -Dspark.history.retainedApplications=100
+            -Dspark.history.fs.cleaner.enabled=true
+            -Dspark.history.fs.cleaner.interval=1d
+            -Dspark.history.fs.cleaner.maxAge=7d
+            -Dspark.history.provider=org.apache.spark.deploy.history.FsHistoryProvider
+            -Dspark.history.store.custom.executorlog.enabled=true
+            -Dspark.history.live.enabled=true
+            -Dspark.history.fs.update.interval=10s
+        - name: SPARK_EVENTLOG_ENABLED  # Ensure event logging is enabled
+          value: "true"
+        volumeMounts:
+        - name: spark-events
+          mountPath: /mnt/data/spark-events
+      volumes:
+      - name: spark-events
+        persistentVolumeClaim:
+          claimName: spark-data-pvc  # Refers to the existing PVC
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spark-history-server
+spec:
+  ports:
+    - port: 18080
+      targetPort: 18080
+  selector:
+    app: spark-history-server
+  type: LoadBalancer
